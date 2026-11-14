@@ -1,1 +1,127 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ściąga do GeoGuessr</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef4f3;--ink:#0f2e3d;--card:#ffffff;--line:#c9dad7;--pin:#e63946;--teal:#1f8a7d;--sun:#f4b942;--muted:#4f6b73;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0c1d26;--ink:#e4f0ee;--card:#142a35;--line:#27424f;--muted:#9cb6bd;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0c1d26;--ink:#e4f0ee;--card:#142a35;--line:#27424f;--muted:#9cb6bd;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Bricolage Grotesque",system-ui,sans-serif;line-height:1.5;padding:16px}
+.wrap{max-width:980px;margin:0 auto}
+header{padding:10px 0 14px}
+h1{margin:0;font-size:clamp(30px,7vw,52px);font-weight:800;line-height:1.05;letter-spacing:-.02em}
+header p{margin:6px 0 0;color:var(--muted);max-width:60ch}
+.first{background:var(--ink);color:var(--bg);border-radius:18px;padding:14px 18px;margin:8px 0 14px}
+.first h2{margin:0 0 6px;font-size:20px}
+.first ol{margin:0;padding-left:22px}
+.first li{margin:2px 0}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.tools input[type=search]{flex:1;min-width:180px;font:inherit;padding:8px 14px;border-radius:99px;border:2px solid var(--line);background:var(--card);color:var(--ink)}
+.chip{font:inherit;font-weight:600;font-size:15px;padding:5px 14px;border-radius:99px;border:2px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--teal);border-color:var(--teal);color:#fff}
+.chip:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.card{background:var(--card);border:1px solid var(--line);border-left:6px solid var(--teal);border-radius:12px;padding:12px 16px}
+.card[data-c="Znaki"]{border-left-color:var(--pin)}
+.card[data-c="Język"]{border-left-color:var(--sun)}
+.card[data-c="Przyroda"]{border-left-color:#6aa84f}
+.card[data-c="Strategia"]{border-left-color:var(--ink)}
+.card h3{margin:0 0 4px;font-size:19px;font-weight:800}
+.card small{color:var(--muted);font-weight:600}
+.card ul{margin:6px 0 0;padding-left:18px}
+.card li{margin:4px 0;font-size:15.5px}
+.none{color:var(--muted);padding:20px 0}
+.calc{margin-top:16px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 18px}
+.calc h2{margin:0 0 8px;font-size:22px}
+.calc input[type=range]{width:100%;accent-color:var(--pin)}
+.big{font-size:clamp(28px,6vw,44px);font-weight:800}
+.note{color:var(--muted);font-size:14px;margin-top:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Ściąga do GeoGuessr</h1>
+  <p>Wskazówki, po których w kilka sekund zawęzisz kontynent, kraj i region. Filtruj kategorie albo wyszukaj hasło, np. „żółta” albo „cyrylica”.</p>
+</header>
+<section class="first">
+  <h2>Pierwsze 15 sekund</h2>
+  <ol>
+    <li>Spójrz na pismo i język napisów.</li>
+    <li>Sprawdź stronę ruchu i kolor linii na jezdni.</li>
+    <li>Oceń roślinność, ziemię i położenie słońca.</li>
+    <li>Wskaż kraj, a dopiero potem region, i zatwierdź zgadnięcie.</li>
+  </ol>
+</section>
+<div class="tools">
+  <input type="search" id="q" placeholder="Szukaj wskazówki…" aria-label="Szukaj wskazówki">
+  <span id="chips"></span>
+</div>
+<div class="grid" id="grid"></div>
+<p class="none" id="none" hidden>Nic nie znaleziono. Spróbuj innego hasła.</p>
+<section class="calc">
+  <h2>Ile punktów za błąd?</h2>
+  <label for="km">Odległość od prawidłowego miejsca: <b id="kmv">500</b> km</label>
+  <input type="range" id="km" min="0" max="10000" step="50" value="500">
+  <div class="big" id="pts">0 pkt</div>
+  <div class="note">Wzór dla mapy świata: 5000 × e^(−10 × odległość / 14 917 km). Błąd rzędu 1500 km zostawia około jednej trzeciej punktów.</div>
+</section>
+<p class="note">Wskazówki są uproszczone, a każda reguła ma wyjątki. Traktuj je jako prawdopodobieństwa, nie pewniki. Do dokładniejszej nauki szukaj serwisów z notatkami meta, np. Plonk It.</p>
+</div>
+<script>
+(function(){
+var D=[
+["Droga","Strona ruchu",["Lewostronny: Wielka Brytania, Irlandia, Japonia, Australia, Nowa Zelandia, RPA, Indie, Tajlandia, Indonezja, Kenia.","Prawostronny: większość Europy, obie Ameryki, Chiny, Rosja.","Patrz, po której stronie jedzie auto przed tobą i po której stoją znaki."]],
+["Droga","Linie na jezdni",["Żółta linia środkowa: USA, Kanada, Meksyk, większość Ameryki Łacińskiej, a w Europie m.in. Norwegia i Finlandia.","Biała linia środkowa: większość Europy, Australia.","Żółte linie krawędziowe: m.in. Irlandia i RPA."]],
+["Droga","Słupki i słupy",["Słupki przy drodze mają w każdym kraju własny wzór: zwróć uwagę na kolor, paski i odblask.","Materiał słupów energetycznych (drewno, beton, metal) i liczba przewodów zwężają region.","W USA często widać drewniane słupy z dużym transformatorem."]],
+["Znaki","Kształt znaków ostrzegawczych",["Trójkąt z czerwoną ramką: Europa i duża część Azji oraz Afryki.","Żółty romb: USA, Kanada, Ameryka Południowa, Australia, Nowa Zelandia."]],
+["Znaki","Znak STOP i jednostki",["Napis na znaku: ALTO (Meksyk), PARE (Brazylia, Argentyna), ARRÊT (Quebec).","Mile na godzinę zobaczysz w USA i Wielkiej Brytanii, kilometry gdzie indziej.","Prostokątny biały znak „SPEED LIMIT” to typowy obraz USA i Kanady."]],
+["Znaki","Tablice rejestracyjne",["Europa: niebieski pasek UE z literą kraju.","Żółte tablice z tyłu: Wielka Brytania (z przodu białe) i Holandia.","Japonia: białe tablice, żółte w małych autach typu kei.","USA i Australia: wzory różnią się w zależności od stanu."]],
+["Język","Pisma",["Cyrylica: Rosja, Ukraina, Białoruś, Bułgaria, Serbia, Mongolia.","Alfabet grecki: Grecja i Cypr.","Arabskie: Bliski Wschód i Afryka Północna.","Devanagari: Indie i Nepal. Tajskie: Tajlandia. Hangul: Korea.","Japonia i Chiny: jeśli widać hiraganę lub katakanę, to Japonia."]],
+["Język","Znaki diakrytyczne",["ł, ą, ę: Polska. ő, ű: Węgry. ñ: hiszpański.","ã, õ: portugalski. å, ä, ö: Szwecja i Finlandia. æ, ø: Norwegia i Dania.","č, š, ž: Czechy, Słowacja, Słowenia, Chorwacja i Bałkany.","ă, ș, ț: Rumunia. ı, ş, ğ: Turcja. ė, ų: Litwa."]],
+["Język","Słowa na znakach",["„Sortie” francuski, „Ausfahrt” niemiecki, „Uscita” włoski.","„Salida” hiszpański, „Saída” portugalski, „Uitgang” afrikaans.","Numery telefonów i domeny: +48 .pl, +49 .de, +81 .jp, +55 .br."]],
+["Przyroda","Roślinność",["Eukaliptusy: Australia, ale też Portugalia i Hiszpania.","Baobaby: Afryka i Madagaskar. Kaktusy saguaro: południowy zachód USA.","Brzozy i las borealny: Skandynawia, Rosja, Kanada.","Palmy kokosowe i bujna zieleń: tropiki."]],
+["Przyroda","Kolor ziemi",["Czerwona ziemia: Australia, Afryka Wschodnia, Brazylia.","Bardzo ciemna, czarna gleba: Ukraina."]],
+["Przyroda","Słońce i półkula",["Na półkuli północnej słońce w południe stoi na południu, na południowej na północy.","Krótki cień w południe sugeruje położenie blisko równika.","Zestaw to z porą roku: zima w styczniu to półkula północna."]],
+["Przyroda","Auto i jakość obrazu",["Czasem widać elementy auta Google, np. snorkel w Kenii.","Rozmazany obraz to zwykle starsza generacja kamery, częsta na odległych drogach.","Całkowity brak pokrycia w niektórych krajach (np. w praktyce w Chinach) wyklucza je z puli lokalizacji."]],
+["Strategia","Zawężaj od ogółu do szczegółu",["Kontynent, kraj, region, miejscowość: nie przeskakuj kroków.","Gdy kraj jest pewny, a region nie, postaw pinezkę w środku kraju."]],
+["Strategia","Gdy nic nie wiesz",["Wybierz środek największego prawdopodobnego regionu, np. środek Europy albo środkowe USA.","Unikaj skrajnych pinezek: duży błąd kosztuje prawie wszystkie punkty."]],
+["Strategia","Szukaj tropów w ruchu",["Jedź do skrzyżowania lub miasta: tam jest więcej znaków, tablic i napisów.","Sprawdź, czy tryb gry pozwala się poruszać, i wykorzystaj to, zanim zgadniesz."]],
+["Strategia","Jak się uczyć",["Po każdej rundzie zapisz, po czym powinieneś był rozpoznać kraj.","Wybieraj po jednym kontynencie na tydzień i wracaj do swoich błędów."]]
+];
+var cats=['Wszystko'];D.forEach(function(d){if(cats.indexOf(d[0])<0)cats.push(d[0]);});
+var cur='Wszystko',q='';
+var chips=document.getElementById('chips'),grid=document.getElementById('grid'),none=document.getElementById('none');
+cats.forEach(function(c){
+  var b=document.createElement('button');b.className='chip';b.textContent=c;b.setAttribute('aria-pressed',c===cur);
+  b.addEventListener('click',function(){cur=c;[].forEach.call(chips.children,function(x){x.setAttribute('aria-pressed',x===b);});render();});
+  chips.appendChild(b);chips.appendChild(document.createTextNode(' '));
+});
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;');}
+function render(){
+  var n=0,h='';
+  D.forEach(function(d){
+    if(cur!=='Wszystko'&&d[0]!==cur)return;
+    var txt=(d[1]+' '+d[2].join(' ')).toLowerCase();
+    if(q&&txt.indexOf(q)<0)return;
+    n++;
+    h+='<article class="card" data-c="'+d[0]+'"><small>'+d[0]+'</small><h3>'+esc(d[1])+'</h3><ul>'+d[2].map(function(i){return '<li>'+esc(i)+'</li>';}).join('')+'</ul></article>';
+  });
+  grid.innerHTML=h;none.hidden=n>0;
+}
+document.getElementById('q').addEventListener('input',function(e){q=e.target.value.trim().toLowerCase();render();});
+var km=document.getElementById('km');
+function calc(){var d=+km.value;document.getElementById('kmv').textContent=d;document.getElementById('pts').textContent=Math.round(5000*Math.exp(-10*d/14916.862))+' pkt';}
+km.addEventListener('input',calc);
+render();calc();
+})();
+</script>
+</body>
+</html>
 
